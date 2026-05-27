@@ -1,0 +1,174 @@
+---
+- name: Instal·lar i configurar ELK Stack
+  hosts: elk
+  become: true
+  vars:
+    elk_version: "8.13.0"
+  tasks:
+    - name: Actualitzar apt
+      apt:
+        update_cache: yes
+    - name: Instal·lar dependències
+      apt:
+        name:
+          - apt-transport-https
+          - curl
+          - gnupg
+          - openjdk-17-jdk
+        state: present
+    - name: Afegir clau GPG d'Elastic
+      apt_key:
+        url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
+        state: present
+    - name: Afegir repositori d'Elastic
+      apt_repository:
+        repo: "deb https://artifacts.elastic.co/packages/8.x/apt stable main"
+        state: present
+        filename: elastic-8.x
+    - name: Instal·lar Elasticsearch
+      apt:
+        name: elasticsearch
+        state: present
+        update_cache: yes
+    - name: Configurar Elasticsearch
+      copy:
+        dest: /etc/elasticsearch/elasticsearch.yml
+        content: |
+          cluster.name: elk-cluster
+          node.name: elk-node
+          network.host: 0.0.0.0
+          http.port: 9200
+          discovery.type: single-node
+          xpack.security.enabled: false
+          xpack.security.enrollment.enabled: false
+          xpack.security.http.ssl.enabled: false
+          xpack.security.transport.ssl.enabled: false
+    - name: Configurar JVM Elasticsearch per a t3.small
+      copy:
+        dest: /etc/elasticsearch/jvm.options.d/memory.options
+        content: |
+          -Xms512m
+          -Xmx512m
+    - name: Crear directori de logs d'Elasticsearch
+      file:
+        path: /usr/share/elasticsearch/logs
+        state: directory
+        owner: elasticsearch
+        group: elasticsearch
+        mode: '0755'
+    - name: Corregir permisos d'Elasticsearch
+      file:
+        path: /usr/share/elasticsearch
+        state: directory
+        owner: elasticsearch
+        group: elasticsearch
+        recurse: yes
+    - name: Iniciar Elasticsearch
+      systemd:
+        name: elasticsearch
+        enabled: yes
+        state: started
+    - name: Instal·lar Logstash
+      apt:
+        name: logstash
+        state: present
+    - name: Configurar JVM Logstash per a t3.small
+      copy:
+        dest: /etc/logstash/jvm.options
+        content: |
+          -Xms256m
+          -Xmx256m
+    - name: Configurar pipeline Logstash
+      copy:
+        dest: /etc/logstash/conf.d/syslog.conf
+        content: |
+          input {
+            beats {
+              port => 5044
+            }
+          }
+          filter {
+            if [type] == "syslog" {
+              grok {
+                match => { "message" => "%{SYSLOGTIMESTAMP:syslog_timestamp} %{SYSLOGHOST:syslog_hostname} %{DATA:syslog_program}(?:\[%{POSINT:syslog_pid}\])?: %{GREEDYDATA:syslog_message}" }
+              }
+            }
+          }
+          output {
+            elasticsearch {
+              hosts => ["http://localhost:9200"]
+              index => "logs-%{+YYYY.MM.dd}"
+            }
+          }
+    - name: Iniciar Logstash
+      systemd:
+        name: logstash
+        enabled: yes
+        state: started
+    - name: Instal·lar Kibana
+      apt:
+        name: kibana
+        state: present
+    - name: Configurar Kibana
+      copy:
+        dest: /etc/kibana/kibana.yml
+        content: |
+          server.port: 5601
+          server.host: "0.0.0.0"
+          elasticsearch.hosts: ["http://localhost:9200"]
+    - name: Iniciar Kibana
+      systemd:
+        name: kibana
+        enabled: yes
+        state: started
+      
+    - name: Crear usuari adminelk
+      user:
+        name: adminelk
+        shell: /bin/bash
+        groups: sudo
+        append: yes
+        state: present
+
+    - name: Crear directori .ssh per a adminelk
+      file:
+        path: /home/adminelk/.ssh
+        state: directory
+        owner: adminelk
+        group: adminelk
+        mode: '0700'
+
+    - name: Afegir clau publica a adminelk
+      authorized_key:
+        user: adminelk
+        state: present
+        key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDA4Q9mJHAq94KGa73eqki1+Iq1MhVIwM1R2C7kWldQD2TgVGpCY4oQ1Yk1lXC9noK1GSRhuccV/vTuKAcXWT4q6ZuMJ0bQYnQZg80DN1oqW7NaI0yG12Mmi+/9Ip/XbVESt5pBPPznLY8coWEy4g6aFGjuMX4hz1o5ml6yD0Q4BscdaioORr6Kqk7rsl3CoEc6SvY/q8YFuBNLOAlGTgqdvaQcpL6f0TZy2pRPmiemIKoM0F99fNJ3wEBnfSfEMZXiK0Qo3E4TAmn8/C/2C6VwUiZfH9sWDAHjnkX7gfvznlTCnR9Wk5so76/HY8Mu4g1VwzQeLTOVLaCXMb1M+dyX eee_W_6237064@ip-172-31-2-202"
+
+    - name: Permetre sudo sense contrasenya a adminelk
+      lineinfile:
+        path: /etc/sudoers
+        line: 'adminelk ALL=(ALL) NOPASSWD:ALL'
+        validate: 'visudo -cf %s'
+
+    - name: Deshabilitar acces SSH a usuari ubuntu
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        line: 'DenyUsers ubuntu'
+        state: present
+
+    - name: Reiniciar SSH
+      systemd:
+        name: ssh
+        state: restarted
+
+    - name: Esperar que Elasticsearch estigui llest
+      uri:
+        url: http://localhost:9200
+        status_code: 200
+      register: result
+      until: result.status == 200
+      retries: 30
+      delay: 10
+    - name: ELK instal·lat correctament
+      debug:
+        msg: "ELK Stack instal·lat. Kibana disponible a http://{{ ansible_host }}:5601"

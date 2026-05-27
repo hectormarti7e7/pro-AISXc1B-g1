@@ -1,0 +1,66 @@
+---
+- name: Crear instancia EC2 per al servidor d'audio
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    region: us-east-1
+    vpc_id: vpc-0c0bca8abd91fba8f
+    subnet_id: subnet-02d3432248e9fcb8d
+    instance_type: t3.small
+    ami_id: ami-0fc0d6e8d70ab2d42
+    key_name: elk-key
+    instance_name: audio-server
+
+  tasks:
+    - name: Crear security group per a audio
+      amazon.aws.ec2_security_group:
+        name: audio-sg
+        description: Security group per al servidor d'audio
+        vpc_id: "{{ vpc_id }}"
+        region: "{{ region }}"
+        rules:
+          - proto: tcp
+            ports: [22]
+            cidr_ip: 0.0.0.0/0
+          - proto: tcp
+            ports: [80]
+            cidr_ip: 0.0.0.0/0
+          - proto: tcp
+            ports: [443]
+            cidr_ip: 0.0.0.0/0
+          - proto: tcp
+            ports: [8800]
+            cidr_ip: 0.0.0.0/0
+        rules_egress:
+          - proto: all
+            cidr_ip: 0.0.0.0/0
+      register: sg
+
+    - name: Crear instancia EC2
+      amazon.aws.ec2_instance:
+        name: "{{ instance_name }}"
+        region: "{{ region }}"
+        key_name: "{{ key_name }}"
+        instance_type: "{{ instance_type }}"
+        image_id: "{{ ami_id }}"
+        subnet_id: "{{ subnet_id }}"
+        security_group: "{{ sg.group_id }}"
+        network:
+          assign_public_ip: true
+        volumes:
+          - device_name: /dev/sda1
+            ebs:
+              volume_size: 20
+              volume_type: gp3
+              delete_on_termination: true
+        wait: true
+        state: present
+        tags:
+          Name: "{{ instance_name }}"
+      register: ec2
+
+    - name: Mostrar IP publica
+      debug:
+        msg: "IP publica del servidor d'audio: {{ ec2.instances[0].public_ip_address }}"

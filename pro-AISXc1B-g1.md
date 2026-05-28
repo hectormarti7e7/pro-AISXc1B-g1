@@ -1213,7 +1213,8 @@ sudo php bin/cli run:addCatalog Musica /var/www/ampache/music music
 
 **A continuació, s’ha hagut de actualitzar el catàleg altre cop per a escanejar les cançons:**
 
-sudo php bin/cli run:updateCatalog![](img/img119.jpg)
+sudo php bin/cli run:updateCatalog
+![](img/img119.jpg)
 
 **I s’ha tornat a crear l’usuari admiaudio a la nova base de dades:**
 

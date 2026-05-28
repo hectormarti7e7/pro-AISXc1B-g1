@@ -290,7 +290,7 @@ La Capa 3 és una gàbia de seguretat dins del contenidor, on estaran els dos ra
 Pel que fa a la part de videovigilància, s'instal·larien 4 càmeres (la primera a l'entrada del pati interior, la segona a la porta del contenidor a l'exterior, la tercera a l'interior del contenidor a la cantonada dreta i la quarta a l'interior del contenidor a la cantonada esquerra en paral·lel a la tercera). Les característiques de les càmeres són:  
 ·Resolució 1080p Full HD com a mínim.  
 ·Visió nocturna per infrarojos.  
-·Gravació contínua 24/7.  
+·Grabació contínua 24/7.  
 ·Emmagatzematge en NVR amb disc de 6 TB, amb una retenció de 30 dies de gravació.  
 ·Accés remot a les gravacions exclusivament mitjançant VPN, només disponible en els ordinadors del responsable de seguretat.
 
